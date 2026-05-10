@@ -41,9 +41,12 @@ list.Parent = scroll
 
 -- 🧠 DATA
 local entries = {}
-local UnitPlacedTime = {}
 
--- ⏱️ helper
+-- ⏱️ GLOBAL SESSION TIMER (STARTS WHEN PLAYER JOINS)
+local SessionStart = os.clock()
+local UnitPlacedOffset = {}
+
+-- ⏱️ format helper
 local function formatTime(seconds)
 	if seconds < 60 then
 		return math.floor(seconds) .. "s"
@@ -76,9 +79,9 @@ end
 -- 🧠 CREATE ENTRY
 local function createEntry(unit)
 
-	-- ⏱️ store spawn timestamp (ONLY ONCE)
-	if not UnitPlacedTime[unit] then
-		UnitPlacedTime[unit] = os.clock()
+	-- 🧊 freeze unit's position on the SESSION timeline
+	if not UnitPlacedOffset[unit] then
+		UnitPlacedOffset[unit] = os.clock() - SessionStart
 	end
 
 	local label = Instance.new("TextLabel")
@@ -92,7 +95,7 @@ local function createEntry(unit)
 
 	entries[unit] = label
 
-	-- 🔥 LEVEL CHANGE TRACKER
+	-- 🔥 LEVEL CHANGE TRACK
 	local lvl = unit:FindFirstChild("TroopLevel")
 	if lvl and lvl:IsA("IntValue") then
 		lvl:GetPropertyChangedSignal("Value"):Connect(function()
@@ -128,26 +131,27 @@ local function removeEntry(unit)
 		entries[unit]:Destroy()
 		entries[unit] = nil
 	end
-	UnitPlacedTime[unit] = nil
+	UnitPlacedOffset[unit] = nil
 end
 
--- 🔄 GLOBAL UPDATE LOOP (ONE TIMER FOR ALL UNITS)
+-- 🔄 SINGLE GLOBAL UPDATE LOOP
 task.spawn(function()
 	while true do
 		local now = os.clock()
+		local sessionTime = now - SessionStart
 
 		for unit, label in pairs(entries) do
 			if unit and unit.Parent then
 				local x, y, z = getPos(unit)
 
-				local placedAt = UnitPlacedTime[unit] or now
-				local elapsed = now - placedAt
+				local offset = UnitPlacedOffset[unit] or 0
+				local aliveTime = sessionTime - offset
 
 				label.Text =
 					"🧱 " .. unit.Name ..
 					"\n⭐ Level: " .. getLevel(unit) ..
 					"\n📍 X:" .. x .. " Y:" .. y .. " Z:" .. z ..
-					"\n⏱️ Alive Time: " .. formatTime(elapsed)
+					"\n⏱️ Time: " .. formatTime(aliveTime)
 			end
 		end
 
