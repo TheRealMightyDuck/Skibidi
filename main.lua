@@ -42,11 +42,10 @@ list.Parent = scroll
 -- 🧠 DATA
 local entries = {}
 
--- ⏱️ GLOBAL SESSION TIMER (STARTS WHEN PLAYER JOINS)
-local SessionStart = os.clock()
-local UnitPlacedOffset = {}
+-- ⏱️ GLOBAL CLOCK (STARTS WHEN SCRIPT RUNS)
+local StartTime = os.clock()
 
--- ⏱️ format helper
+-- ⏱️ FORMAT TIME
 local function formatTime(seconds)
 	if seconds < 60 then
 		return math.floor(seconds) .. "s"
@@ -76,13 +75,8 @@ local function getPos(unit)
 	return 0, 0, 0
 end
 
--- 🧠 CREATE ENTRY
+-- 🧠 CREATE ENTRY (SNAPSHOT TIME HERE)
 local function createEntry(unit)
-
-	-- 🧊 freeze unit's position on the SESSION timeline
-	if not UnitPlacedOffset[unit] then
-		UnitPlacedOffset[unit] = os.clock() - SessionStart
-	end
 
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.new(1, -10, 0, 80)
@@ -95,82 +89,38 @@ local function createEntry(unit)
 
 	entries[unit] = label
 
-	-- 🔥 LEVEL CHANGE TRACK
-	local lvl = unit:FindFirstChild("TroopLevel")
-	if lvl and lvl:IsA("IntValue") then
-		lvl:GetPropertyChangedSignal("Value"):Connect(function()
-			print(unit.Name .. " leveled up to", lvl.Value)
-		end)
-	end
+	-- ⏱️ SNAPSHOT TIME (FREEZES FOR THIS UNIT)
+	local spawnTime = os.clock() - StartTime
 
-	-- 🔥 OTHER VALUE WATCHERS
-	for _, obj in ipairs(unit:GetDescendants()) do
-		if obj:IsA("StringValue") then
-			obj:GetPropertyChangedSignal("Value"):Connect(function()
-				print(unit.Name .. " TEXT EVENT:", obj.Value)
-			end)
-		end
+	local x, y, z = getPos(unit)
 
-		if obj:IsA("CFrameValue") then
-			obj:GetPropertyChangedSignal("Value"):Connect(function()
-				print(unit.Name .. " CFrame changed:", obj.Value)
-			end)
-		end
-
-		if obj:IsA("TextLabel") then
-			obj:GetPropertyChangedSignal("Text"):Connect(function()
-				print(unit.Name .. " GUI TEXT:", obj.Text)
-			end)
-		end
-	end
+	label.Text =
+		"🧱 " .. unit.Name ..
+		"\n⭐ Level: " .. getLevel(unit) ..
+		"\n📍 X:" .. x .. " Y:" .. y .. " Z:" .. z ..
+		"\n⏱️ Placed At: " .. formatTime(spawnTime)
 end
 
--- ❌ REMOVE ENTRY
+-- ❌ REMOVE
 local function removeEntry(unit)
 	if entries[unit] then
 		entries[unit]:Destroy()
 		entries[unit] = nil
 	end
-	UnitPlacedOffset[unit] = nil
 end
 
--- 🔄 SINGLE GLOBAL UPDATE LOOP
-task.spawn(function()
-	while true do
-		local now = os.clock()
-		local sessionTime = now - SessionStart
-
-		for unit, label in pairs(entries) do
-			if unit and unit.Parent then
-				local x, y, z = getPos(unit)
-
-				local offset = UnitPlacedOffset[unit] or 0
-				local aliveTime = sessionTime - offset
-
-				label.Text =
-					"🧱 " .. unit.Name ..
-					"\n⭐ Level: " .. getLevel(unit) ..
-					"\n📍 X:" .. x .. " Y:" .. y .. " Z:" .. z ..
-					"\n⏱️ Time: " .. formatTime(aliveTime)
-			end
-		end
-
-		task.wait(0.2)
-	end
-end)
-
--- ➕ EXISTING UNITS
+-- ➕ EXISTING
 for _, unit in ipairs(UnitsFolder:GetChildren()) do
 	createEntry(unit)
 end
 
--- ➕ NEW UNITS
+-- ➕ NEW
 UnitsFolder.ChildAdded:Connect(function(unit)
 	task.wait(0.1)
 	createEntry(unit)
 end)
 
--- ❌ REMOVED UNITS
+-- ❌ REMOVED
 UnitsFolder.ChildRemoved:Connect(function(unit)
 	removeEntry(unit)
 end)
